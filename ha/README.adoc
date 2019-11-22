@@ -1,0 +1,138 @@
+:icons: font
+:source-highlighter: pygments
+:toc: left
+
+= Highly available application on EKS
+
+This one stop document is a collection (of links) of best practices to develop and deploy highly available (HA) applications on Kubernetes, specifically https://aws.amazon.com/eks/[Amazon Elastic Kubernetes Service (EKS)]. It is not about building a highly available kubernetes cluster (multiple master, etcd, etc), because that's taken care of by EKS.
+
+== Applications, deployments, services
+
+The basic premise of high availability is to eliminate single points of failure. In kubernetes, this means there should be multiple replicas of your application. Applications should always be deployed using a k8s https://kubernetes.io/docs/concepts/workloads/controllers/deployment/[deployment] instead of pods (even when you only need a single replica), and exposed to consumers as a https://kubernetes.io/docs/concepts/services-networking/service/[service]. However, that's just the beginning...
+
+=== Health checks
+
+In order for kubernetes to replace failed pods, it needs a good indication of when a pod has failed. By default, kubernetes deem a container failed when the main process (the `ENTRYPOINT` and/or `CMD` of your `Dockerfile`) terminates. We can improve this with https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/[liveness and readiness probes]. 
+
+Liveness probes provide a way for k8s to know if the application is healthy. Readiness probe provide a way for k8s to know if a newly started pod is ready to service requests. This can be helpful for application that has slow startup time.
+
+Most modern web frameworks provides capability to easily inject a health check into your application (e.g. https://docs.spring.io/spring-boot/docs/current/reference/html/production-ready-features.html[Spring Boot Actuator]).
+
+=== Graceful termination
+
+Care can also be exercised to improve robustness when application terminates. When a https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods[pod is terminated], a `TERM` signal is sent to the main process in each container. After a grace period has expired, the `KILL` signal is sent to those processes. In addition, kubernetes also provides https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/[lifecycle hooks] to provide finer control of the pod shutdown process.
+
+Depending on the programming language/application framework used, it may be necessary to handle the `TERM` signal (or implement a `preStop` hook) to release/cleanup any shared resources (e.g. database connection, file locks, etc.). 
+
+If the pod is for some reason directly attached to a load balancer, this is also the opportunity to unregister itself from the load balancer to stop sending new requests during the shutdown process (and other reason to expose your application as a k8s service).
+
+=== Horizontal pod autoscaler
+
+It is often desireable to be able to scale application automatically. In k8s, the model is to scale horizontally (adding more pods). The mechanism is aptly called https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/[horizontal pod autoscaler]. Example:
+[source,yaml]
+----
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: php-apache
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: php-apache
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu <1>
+      target:
+        type: Utilization
+        averageUtilization: 50
+----
+
+<1> in this example we're scaling based on cpu utilization
+
+IMPORTANT: For hpa to work, it must be able to access metrics to determine when to scale in/out. 
+EKS does not enable metrics by default. You need to https://docs.aws.amazon.com/eks/latest/userguide/metrics-server.html[install k8s metrics server on your cluster]. In addition, you can https://docs.aws.amazon.com/eks/latest/userguide/prometheus.html[use Prometheus to provide custom metrics] as input to autoscaling.
+
+=== Affinity and anti-affinity
+
+For HA, we want to distribute replicas of the same deployment across 2 or more nodes. K8s uses a system of labels and selectors to determine which node to schedule pods. In addition, we can use https://v1-14.docs.kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity[affinity and anti-affinity] declaration to influence where your pods get scheduled.
+
+Example: 
+[source,yaml]
+----
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-cache
+spec:
+  selector:
+    matchLabels:
+      app: store
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: store <1>
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector: <2>
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - store
+            topologyKey: "kubernetes.io/hostname"
+      containers:
+      - name: redis-server
+        image: redis:3.2-alpine
+----
+
+<1> Deployment has a label `app=store`
+<2> Anti affinity declaration to avoid being place alongside pods with label `app=store`
+
+NOTE: Sometime it's desirable to place related deployments on the same nodes for better performance. E.g. https://eksworkshop.com/assigning_pods/affinity_usecases/[a web server and a redis cache]
+
+NOTE: In addition to label/selector and affinity/anti-affinity, k8s also provides https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/[taints and tolerations] to allow a node to repel a set of pods.
+
+== Nodes, node groups
+
+In EKS, nodes (groups) are provisioned https://docs.aws.amazon.com/autoscaling/ec2/userguide/AutoScalingGroup.html[EC2 Auto Scaling Groups]. Check https://docs.aws.amazon.com/eks/latest/userguide/launch-workers.html[here] on how to launch worker nodes.
+
+NOTE: Beginning EKS 1.14, AWS launched https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html[Managed Node Groups] to make it easier to provision and manage worker nodes.
+
+For high availability, nodes should be spread across 2 or more availablity zones. This can be achieved by a single node group spaning multiple AZ or dedicated node group for each AZ.
+
+=== Cluster autoscaler
+
+https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler[Cluster autoscaler] automatically adjusts the number of nodes in a Kubernetes cluster. 
+
+NOTE: Cluster autoscaler is not setup by default, the documentation to set it up on EKS can be found https://docs.aws.amazon.com/eks/latest/userguide/cluster-autoscaler.html[here], and there's also an article from knowledge center https://aws.amazon.com/premiumsupport/knowledge-center/eks-cluster-autoscaler-setup/[here].
+
+=== Over provisioning 
+
+=== Replacing nodes
+
+=== Disruptions
+
+== Observability
+
+=== Logs and metrics
+
+=== Container insights
+
+== Cluster
+
+=== Federation
+
+== Infrastructure as code
+
+== References
+
+https://eksworkshop.com[EKS Workshop]
+https://docs.aws.amazon.com/eks/latest/userguide/metrics-server.html[Installing the Kubernetes Metrics Server on EKS]
