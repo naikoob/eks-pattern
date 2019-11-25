@@ -1,5 +1,5 @@
 :icons: font
-:source-highlighter: pygments
+:source-highlighter: coderay
 :toc: left
 
 = Highly available application on EKS
@@ -79,9 +79,9 @@ spec:
         app: store <1>
     spec:
       affinity:
-        podAntiAffinity:
+        podAntiAffinity: <2>
           requiredDuringSchedulingIgnoredDuringExecution:
-          - labelSelector: <2>
+          - labelSelector:
               matchExpressions:
               - key: app
                 operator: In
@@ -104,7 +104,7 @@ NOTE: In addition to label/selector and affinity/anti-affinity, k8s also provide
 
 In EKS, nodes (groups) are provisioned https://docs.aws.amazon.com/autoscaling/ec2/userguide/AutoScalingGroup.html[EC2 Auto Scaling Groups]. Check https://docs.aws.amazon.com/eks/latest/userguide/launch-workers.html[here] on how to launch worker nodes.
 
-NOTE: Beginning EKS 1.14, AWS launched https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html[Managed Node Groups] to make it easier to provision and manage worker nodes.
+NOTE: Beginning with EKS 1.14, AWS launched https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html[Managed Node Groups] to make it easier to provision and manage worker nodes.
 
 For high availability, nodes should be spread across 2 or more availablity zones. This can be achieved by a single node group spaning multiple AZ or dedicated node group for each AZ.
 
@@ -114,9 +114,13 @@ https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler[Cluster 
 
 NOTE: Cluster autoscaler is not setup by default, the documentation to set it up on EKS can be found https://docs.aws.amazon.com/eks/latest/userguide/cluster-autoscaler.html[here], and there's also an article from knowledge center https://aws.amazon.com/premiumsupport/knowledge-center/eks-cluster-autoscaler-setup/[here].
 
-=== Over provisioning 
+==== Over provisioning 
+
+While cluster autoscaler dynamically adjust the number of nodes in a cluster, it takes time to spin up a new node and have it join the cluster. We can make use of low priority deployments to over provision worker nodes. This process is described https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#how-can-i-configure-overprovisioning-with-cluster-autoscaler[here]. A https://hub.helm.sh/charts/stable/cluster-overprovisioner[helm chart] is also available. This is also described in blogs https://tech.deliveryhero.com/dynamically-overscaling-a-kubernetes-cluster-with-cluster-autoscaler-and-pod-priority/[here] and https://medium.com/scout24-engineering/cluster-overprovisiong-in-kubernetes-79433cb3ed0e[here].
 
 === Replacing nodes
+
+
 
 === Disruptions
 
