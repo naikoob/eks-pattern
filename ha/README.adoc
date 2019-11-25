@@ -1,6 +1,6 @@
 :icons: font
 :imagesdir: ./images
-:source-highlighter: pygments
+:source-highlighter: coderay
 :toc: left
 
 = Highly available application on EKS
