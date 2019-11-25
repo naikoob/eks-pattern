@@ -121,9 +121,11 @@ While cluster autoscaler dynamically adjust the number of nodes in a cluster, it
 
 === Replacing nodes
 
-
+TODO
 
 === Disruptions
+
+TODO
 
 == Observability
 
@@ -137,13 +139,17 @@ EKS does not enable cluster control plane logs by default (because there's https
 
 ==== Application logs
 
-
+TODO
 
 === Container insights
 
+TODO
+
 === Tracing
 
-== Cluster
+TODO
+
+== Multi-cluster
 
 In some cases, it may be desireable to deploy applications across multiple clusters. For example, to serve different geographical regions or just to have higher resilency at control plane level. For that, we can make use of Route53 to distribute requests to multiple clusters, as depicted below:
 
@@ -153,9 +159,15 @@ NOTE: As most applications have external dependencies, such as a persistence bac
 
 === Federation
 
+TODO
+
 == Infrastructure as code
+
+TODO
 
 == References
 
 https://eksworkshop.com[EKS Workshop]
 https://docs.aws.amazon.com/eks/latest/userguide/metrics-server.html[Installing the Kubernetes Metrics Server on EKS]
+
+TODO
