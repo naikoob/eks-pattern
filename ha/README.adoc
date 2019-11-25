@@ -1,4 +1,5 @@
 :icons: font
+:imagesdir: ./images
 :source-highlighter: pygments
 :toc: left
 
@@ -118,15 +119,35 @@ NOTE: Cluster autoscaler is not setup by default, the documentation to set it up
 
 === Replacing nodes
 
+
+
 === Disruptions
 
 == Observability
 
+Oberservability is achieved when the data is made available from within the system that you wish to monitor. These data includes logs and metrics.
+
 === Logs and metrics
+
+==== Control plane logs
+
+EKS does not enable cluster control plane logs by default (because there's https://aws.amazon.com/cloudwatch/pricing/[cost] involved). For production clusters, it is important to enable these logs. Control plane logs can be enabled from the AWS Console, CLI or APIs, as described https://docs.aws.amazon.com/eks/latest/userguide/control-plane-logs.html[here].
+
+==== Application logs
+
+
 
 === Container insights
 
+=== Tracing
+
 == Cluster
+
+In some cases, it may be desireable to deploy applications across multiple clusters. For example, to serve different geographical regions or just to have higher resilency at control plane level. For that, we can make use of Route53 to distribute requests to multiple clusters, as depicted below:
+
+image::multiple-clusters.png[]
+
+NOTE: As most applications have external dependencies, such as a persistence backend, these dependencies should be available to both clusters for the above topology to work.
 
 === Federation
 
