@@ -104,7 +104,7 @@ NOTE: In addition to label/selector and affinity/anti-affinity, k8s also provide
 
 == Nodes, node groups
 
-In EKS, nodes (groups) are provisioned https://docs.aws.amazon.com/autoscaling/ec2/userguide/AutoScalingGroup.html[EC2 Auto Scaling Groups]. Check https://docs.aws.amazon.com/eks/latest/userguide/launch-workers.html[here] on how to launch worker nodes.
+In EKS, nodes (groups) are provisioned as https://docs.aws.amazon.com/autoscaling/ec2/userguide/AutoScalingGroup.html[EC2 Auto Scaling Groups]. Check https://docs.aws.amazon.com/eks/latest/userguide/launch-workers.html[here] on how to launch worker nodes.
 
 NOTE: Beginning with EKS 1.14, AWS launched https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html[Managed Node Groups] to make it easier to provision and manage worker nodes.
 
@@ -118,13 +118,33 @@ NOTE: Cluster autoscaler is not setup by default, the documentation to set it up
 
 ==== Over provisioning 
 
-While cluster autoscaler dynamically adjust the number of nodes in a cluster, it takes time to spin up a new node and have it join the cluster. We can make use of low priority deployments to over provision worker nodes. This process is described https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#how-can-i-configure-overprovisioning-with-cluster-autoscaler[here]. A https://hub.helm.sh/charts/stable/cluster-overprovisioner[helm chart] is also available. This is also described in blogs https://tech.deliveryhero.com/dynamically-overscaling-a-kubernetes-cluster-with-cluster-autoscaler-and-pod-priority/[here] and https://medium.com/scout24-engineering/cluster-overprovisiong-in-kubernetes-79433cb3ed0e[here].
+While cluster autoscaler dynamically adjust the number of nodes in a cluster, it takes time to spin up a new node and have it join the cluster. We can make use of low priority deployments to over provision worker nodes. This process is described in the cluster-autoscaler project https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#how-can-i-configure-overprovisioning-with-cluster-autoscaler[here]. A https://hub.helm.sh/charts/stable/cluster-overprovisioner[helm chart] is also available. There are also blogs https://tech.deliveryhero.com/dynamically-overscaling-a-kubernetes-cluster-with-cluster-autoscaler-and-pod-priority/[here] and https://medium.com/scout24-engineering/cluster-overprovisiong-in-kubernetes-79433cb3ed0e[here].
 
 === Replacing nodes
 
+Every now and then we'll need to update our worker nodes, like applying patches, or upgrading the Kubernetes component version. In cloud native spirit, we replace nodes with new patches/version installed instead of apply changes to nodes in-place. This means spinning up new nodes or node groups and drain pods from the old nodes to the new nodes. This process is https://docs.aws.amazon.com/eks/latest/userguide/update-workers.html[document here] for self managed EKS nodes. For managed node groups, please refer to https://docs.aws.amazon.com/eks/latest/userguide/update-managed-node-group.html[documentation here].
 
+=== Disruption budget
 
-=== Disruptions
+As pods are scheduled dynamically across nodes, there may be risks of evacuating too many pods of the same application during the draining process. We use https://kubernetes.io/docs/tasks/run-application/configure-pdb/[PodDisruptionBudget] to minimise this. PodDisruptionBudget is a k8s construct that let us specify the min/max available/unavailable tolerance for a deployment. 
+
+For example:
+[source,yaml]
+----
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: zk-pdb
+spec:
+  minAvailable: 2 <1>
+  selector:
+    matchLabels:
+      app: zookeeper
+----
+
+<1> minimum 2 copies of pods with label `app=zookeeper` should be running
+
+Check https://kubernetes.io/docs/concepts/workloads/pods/disruptions/#how-disruption-budgets-work[here for how disruption budgets work].
 
 == Observability
 
@@ -138,13 +158,17 @@ EKS does not enable cluster control plane logs by default (because there's https
 
 ==== Application logs
 
-
+TODO
 
 === Container insights
 
+TODO
+
 === Tracing
 
-== Cluster
+TODO
+
+== Multi-cluster
 
 In some cases, it may be desireable to deploy applications across multiple clusters. For example, to serve different geographical regions or just to have higher resilency at control plane level. For that, we can make use of Route53 to distribute requests to multiple clusters, as depicted below:
 
@@ -154,9 +178,15 @@ NOTE: As most applications have external dependencies, such as a persistence bac
 
 === Federation
 
+TODO
+
 == Infrastructure as code
+
+TODO
 
 == References
 
-https://eksworkshop.com[EKS Workshop]
-https://docs.aws.amazon.com/eks/latest/userguide/metrics-server.html[Installing the Kubernetes Metrics Server on EKS]
+. https://eksworkshop.com[EKS Workshop]
+. https://docs.aws.amazon.com/eks/latest/userguide/metrics-server.html[Installing the Kubernetes Metrics Server on EKS]
+
+TODO
