@@ -1,3 +1,4 @@
+:data-uri:
 :icons: font
 :imagesdir: ./images
 :source-highlighter: coderay
