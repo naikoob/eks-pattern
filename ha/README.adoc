@@ -9,13 +9,15 @@ This one stop document is a collection (of links) of best practices to develop a
 
 == Applications, deployments, services
 
-The basic premise of high availability is to eliminate single points of failure. In kubernetes, this means there should be multiple replicas of your application. Applications should always be deployed using a k8s https://kubernetes.io/docs/concepts/workloads/controllers/deployment/[deployment] instead of pods (even when you only need a single replica), and exposed to consumers as a https://kubernetes.io/docs/concepts/services-networking/service/[service]. However, that's just the beginning...
+The basic premise of high availability is to eliminate single points of failure. In Kubernetes, this means there should be multiple replicas of your application. Applications should always be deployed using a k8s https://kubernetes.io/docs/concepts/workloads/controllers/deployment/[deployment] instead of pods (even when you only need a single replica), and exposed to consumers as a https://kubernetes.io/docs/concepts/services-networking/service/[service]. However, that's just the beginning...
 
 === Health checks
 
-In order for kubernetes to replace failed pods, it needs a good indication of when a pod has failed. By default, kubernetes deem a container failed when the main process (the `ENTRYPOINT` and/or `CMD` of your `Dockerfile`) terminates. We can improve this with https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/[liveness and readiness probes]. 
+In order for Kubernetes to replace failed pods, it needs a good indication of when a pod has failed. By default, kubernetes deem a container failed when the main process (the `ENTRYPOINT` and/or `CMD` of your `Dockerfile`) terminates. This is fine for some applications. However, for request-response workload such as a REST or gRPC endpoint, there may be situation when process is still active, but no longer responsive to requests. For such workload, we can improve this with https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/[liveness and readiness probes]. 
 
-Liveness probes provide a way for k8s to know if the application is healthy. Readiness probe provide a way for k8s to know if a newly started pod is ready to service requests. This can be helpful for application that has slow startup time.
+Liveness probes provide a way for k8s to know if the application is healthy. Readiness probe provide a way for k8s to know if a newly started pod is ready to service requests. This can be helpful for application that has slow startup time. 
+
+Used appropriately, liveness and readiness probes can improve resilency.
 
 Most modern web frameworks provides capability to easily inject a health check into your application (e.g. https://docs.spring.io/spring-boot/docs/current/reference/html/production-ready-features.html[Spring Boot Actuator]).
 
@@ -97,7 +99,7 @@ spec:
 <1> Deployment has a label `app=store`
 <2> Anti affinity declaration to avoid being place alongside pods with label `app=store`
 
-NOTE: Sometime it's desirable to place related deployments on the same nodes for better performance. E.g. https://eksworkshop.com/assigning_pods/affinity_usecases/[a web server and a redis cache]
+NOTE: Sometime it's desirable to place related deployments on the same nodes for better performance. E.g. https://eksworkshop.com/beginner/140_assigning_pods/affinity_usecases/[a web server and a redis cache]
 
 NOTE: In addition to label/selector and affinity/anti-affinity, k8s also provides https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/[taints and tolerations] to allow a node to repel a set of pods.
 
@@ -149,7 +151,7 @@ Check https://kubernetes.io/docs/concepts/workloads/pods/disruptions/#how-disrup
 
 Oberservability is achieved when the data is made available from within the system that you wish to monitor. These data includes logs and metrics.
 
-=== Logs and metrics
+=== Logs
 
 ==== Control plane logs
 
@@ -157,9 +159,14 @@ EKS does not enable cluster control plane logs by default (because there's https
 
 ==== Application logs
 
-TODO
+When running containers at scale, especially when adopting a microservice approach, it is important to have a logging infrastucture to aggregate logs from different deployments.
 
-=== Container insights
+In k8s community, the most common solution is the EFK stack. Here's a https://eksworkshop.com/intermediate/230_logging/[guide on EFK at eksworkshop.com].
+
+For an AWS based solution, we can also https://aws.amazon.com/blogs/opensource/centralized-container-logging-fluent-bit/[ship logs to S3 via Kinesis Firehose and query using Athena].
+
+=== Metrics
+==== Container insights
 
 TODO
 
