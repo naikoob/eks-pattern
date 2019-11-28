@@ -27,7 +27,7 @@ Care can also be exercised to improve robustness when application terminates. Wh
 
 Depending on the programming language/application framework used, it may be necessary to handle the `TERM` signal (or implement a `preStop` hook) to release/cleanup any shared resources (e.g. database connection, file locks, etc.). 
 
-If the pod is for some reason directly attached to a load balancer, this is also the opportunity to unregister itself from the load balancer to stop sending new requests during the shutdown process (and other reason to expose your application as a k8s service).
+If the pod is for some reason directly attached to a load balancer, this is also the opportunity to unregister itself from the load balancer to stop sending new requests during the shutdown process (another reason to expose your application as a k8s service).
 
 === Horizontal pod autoscaler
 
@@ -152,7 +152,6 @@ Check https://kubernetes.io/docs/concepts/workloads/pods/disruptions/#how-disrup
 Oberservability is achieved when the data is made available from within the system that you wish to monitor. These data includes logs and metrics.
 
 === Logs
-
 ==== Control plane logs
 
 EKS does not enable cluster control plane logs by default (because there's https://aws.amazon.com/cloudwatch/pricing/[cost] involved). For production clusters, it is important to enable these logs. Control plane logs can be enabled from the AWS Console, CLI or APIs, as described https://docs.aws.amazon.com/eks/latest/userguide/control-plane-logs.html[here].
@@ -163,16 +162,21 @@ When running containers at scale, especially when adopting a microservice approa
 
 In k8s community, the most common solution is the EFK stack. Here's a https://eksworkshop.com/intermediate/230_logging/[guide on EFK at eksworkshop.com].
 
-For an AWS based solution, we can also https://aws.amazon.com/blogs/opensource/centralized-container-logging-fluent-bit/[ship logs to S3 via Kinesis Firehose and query using Athena].
+For an AWS based serverless solution, we can also https://aws.amazon.com/blogs/opensource/centralized-container-logging-fluent-bit/[ship logs to S3 via Kinesis Firehose and query using Athena].
 
 === Metrics
+
+Similar to logging, there are multiple options for metrics. https://prometheus.io/docs/introduction/overview/[Prometheus] + https://grafana.com/[Grafana] is a popular open-source solutions. Amazon EKS Workshop has a guide on https://eksworkshop.com/intermediate/240_monitoring/[monitoring using Prometheus and Grafana on EKS]. There are also commercial solutions from Datadog, Dynatrace, New Relic, etc.
+
 ==== Container insights
 
-TODO
+https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/deploy-container-insights-EKS.html[CloudWatch Container Insights] is the AWS offerring for containers metrics. This guide on EKS Workshop demonstrates https://eksworkshop.com/intermediate/250_cloudwatch_container_insights/[how to setup and use Container Insights to monitor an EKS cluster].
 
 === Tracing
 
-TODO
+Tracing is important to gain visiblity on distributed transactions typical of microservices architecture. This usually involves injecting context information to corelate the different steps of a request. Popular open-source solution includes https://www.jaegertracing.io/[Jaeger] and https://zipkin.io/[Zipkin].
+
+AWS based solution is https://aws.amazon.com/xray/[X-Ray], and a https://eksworkshop.com/intermediate/245_x-ray/[walk-through is available on EKS workshop].
 
 == Multi-cluster
 
@@ -182,13 +186,22 @@ image::multiple-clusters.png[]
 
 NOTE: As most applications have external dependencies, such as a persistence backend, these dependencies should be available to both clusters for the above topology to work.
 
+In this setup, applications will be deployed to multiple clusters. This should be automated, e.g. from a CI/CD pipeline, where container images are pushed to a highly available registry accessible by the different clusters, and k8s object (deployments, services, jobs, etc) created on each cluster.
+
 === Federation
 
-TODO
+https://kubernetes.io/blog/2018/12/12/kubernetes-federation-evolution/[Federation] is an area that has been evolving to make it easier to operate multi-cluster. K8s Federation V1 has been deprecated and its use is discouraged. 
+
+https://github.com/kubernetes-sigs/kubefed/tree/master[Federation V2, or kubefed] is currently in alpha and 
+a https://github.com/kubernetes-sigs/kubefed/blob/master/docs/userguide.md[user guide] is available if you want to try it out.
 
 == Infrastructure as code
 
-TODO
+There are many infrastructure as code solutions, many have capability to interact with k8s. Take advantage of this capability to define both the cluster(s) and workloads to be deployed on the clusters as code.
+
+This enables us to create/destroy clusters, along with the workloads, in a consistent manner, on demand. Potentially reduce running costs at the same time.
+
+Depending on RTO, this can also be a very cost effective DR mechanism when running on the cloud (for compute). 
 
 == References
 
