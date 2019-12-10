@@ -17,7 +17,7 @@ In order for Kubernetes to replace failed pods, it needs a good indication of wh
 
 Liveness probes provide a way for k8s to know if the application is healthy. Readiness probe provide a way for k8s to know if a newly started pod is ready to service requests. This can be helpful for application that has slow startup time. 
 
-Used appropriately, liveness and readiness probes can improve resilency.
+https://blog.colinbreck.com/kubernetes-liveness-and-readiness-probes-how-to-avoid-shooting-yourself-in-the-foot/[When used appropriately], liveness and readiness probes can improve resilency.
 
 Most modern web frameworks provides capability to easily inject a health check into your application (e.g. https://docs.spring.io/spring-boot/docs/current/reference/html/production-ready-features.html[Spring Boot Actuator]). Consult documentation of your favourite programming language/framework for specific details.
 
