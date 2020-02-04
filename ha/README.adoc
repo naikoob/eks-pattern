@@ -6,7 +6,7 @@
 
 = Highly available application on EKS
 
-This one stop document is a collection (of links) of best practices to develop and deploy highly available (HA) applications on Kubernetes, specifically https://aws.amazon.com/eks/[Amazon Elastic Kubernetes Service (EKS)]. It is not about building a highly available kubernetes cluster (multiple master, etcd, etc), because that's taken care of by EKS.
+This one stop document is a collection (of links) of best practices to develop and deploy highly available (HA) applications on Kubernetes, specifically https://aws.amazon.com/eks/[Amazon Elastic Kubernetes Service (EKS)]. It is not about building a highly available Kubernetes cluster (multiple master, etcd, etc), because that's taken care of by EKS.
 
 == Applications, deployments, services
 
@@ -14,25 +14,27 @@ The basic premise of high availability is to eliminate single points of failure.
 
 === Health checks
 
-In order for Kubernetes to replace failed pods, it needs a good indication of when a pod has failed. By default, kubernetes deem a container failed when the main process (the `ENTRYPOINT` and/or `CMD` of your `Dockerfile`) terminates. This is fine for some applications. However, for request-response workload such as a REST or gRPC endpoint, there may be situation when process is still active, but no longer responsive to requests. For such workload, we can improve this with https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/[liveness and readiness probes]. 
+In order for Kubernetes to replace failed pods, it needs a good indication of when a pod has failed. By default, Kubernetes deem a container failed when the main process (the `ENTRYPOINT` and/or `CMD` of your `Dockerfile`) terminates. This is fine for some applications. However, for request-response workload such as a REST or gRPC server, there may be situation when process is still active, but no longer responsive to requests. For such workload, we can improve this with https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/[liveness and readiness probes]. 
 
 Liveness probes provide a way for k8s to know if the application is healthy. Readiness probe provide a way for k8s to know if a newly started pod is ready to service requests. This can be helpful for application that has slow startup time. 
 
-Used appropriately, liveness and readiness probes can improve resilency.
+https://blog.colinbreck.com/kubernetes-liveness-and-readiness-probes-how-to-avoid-shooting-yourself-in-the-foot/[When used appropriately], liveness and readiness probes can improve resilency.
 
-Most modern web frameworks provides capability to easily inject a health check into your application (e.g. https://docs.spring.io/spring-boot/docs/current/reference/html/production-ready-features.html[Spring Boot Actuator]).
+Most modern web frameworks provides capability to easily inject a health check into your application (e.g. https://docs.spring.io/spring-boot/docs/current/reference/html/production-ready-features.html[Spring Boot Actuator]). Consult documentation of your favourite programming language/framework for specific details.
 
 === Graceful termination
 
-Care can also be exercised to improve robustness when application terminates. When a https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods[pod is terminated], a `TERM` signal is sent to the main process in each container. After a grace period has expired, the `KILL` signal is sent to those processes. In addition, kubernetes also provides https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/[lifecycle hooks] to provide finer control of the pod shutdown process.
+Care can also be exercised to improve robustness when application terminates. When a https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods[pod is terminated], a `TERM` signal is sent to the main process in each container. After a grace period has expired, the `KILL` signal is sent to those processes. In addition, Kubernetes also provides https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/[lifecycle hooks] to provide finer control of the pod shutdown process.
 
-Depending on the programming language/application framework used, it may be necessary to handle the `TERM` signal (or implement a `preStop` hook) to release/cleanup any shared resources (e.g. database connection, file locks, etc.). 
+Depending on the programming language/application framework used, it may be necessary to handle the `TERM` signal (or implement a `preStop` hook) to stop accepting new requests and release/cleanup any shared resources (e.g. database connection, file locks, etc.). 
 
-If the pod is for some reason directly attached to a load balancer, this is also the opportunity to unregister itself from the load balancer to stop sending new requests during the shutdown process (and other reason to expose your application as a k8s service).
+If the pod is for some reason directly attached to a load balancer, this is also the opportunity to unregister itself from the load balancer during the shutdown process (another reason to expose your application as a k8s service).
 
-=== Horizontal pod autoscaler
+=== Pod autoscaler
 
-It is often desireable to be able to scale application automatically. In k8s, the model is to scale horizontally (adding more pods). The mechanism is aptly called https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/[horizontal pod autoscaler]. Example:
+It is often desireable to be able to scale application automatically. In k8s, the norm is to scale horizontally (adding more pods). The mechanism is aptly called https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/[horizontal pod autoscaler].
+
+Example:
 [source,yaml]
 ----
 apiVersion: autoscaling/v2beta2
@@ -58,12 +60,14 @@ spec:
 
 <1> in this example we're scaling based on cpu utilization
 
-IMPORTANT: For hpa to work, it must be able to access metrics to determine when to scale in/out. 
+It is also possible to autoscale pods vertically with the https://docs.aws.amazon.com/eks/latest/userguide/vertical-pod-autoscaler.html[vertical pod autoscaler (vpa)], which adjusts the CPU and memory reservations of deployments, primarily for stateful workloads, although I'll recommend sizing pods during development and load tests instead of using vpa in production.
+
+IMPORTANT: For hpa and vpa to work, it must be able to access metrics to determine when to scale. 
 EKS does not enable metrics by default. You need to https://docs.aws.amazon.com/eks/latest/userguide/metrics-server.html[install k8s metrics server on your cluster]. In addition, you can https://docs.aws.amazon.com/eks/latest/userguide/prometheus.html[use Prometheus to provide custom metrics] as input to autoscaling.
 
 === Affinity and anti-affinity
 
-For HA, we want to distribute replicas of the same deployment across 2 or more nodes. K8s uses a system of labels and selectors to determine which node to schedule pods. In addition, we can use https://v1-14.docs.kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity[affinity and anti-affinity] declaration to influence where your pods get scheduled.
+For high availability, we want to distribute replicas of the same deployment across 2 or more nodes. K8s uses a system of labels and selectors to determine which node to schedule pods. In addition, we can use https://v1-14.docs.kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity[affinity and anti-affinity] declaration to influence where your pods get scheduled.
 
 Example: 
 [source,yaml]
@@ -124,7 +128,7 @@ While cluster autoscaler dynamically adjust the number of nodes in a cluster, it
 
 === Replacing nodes
 
-Every now and then we'll need to update our worker nodes, like applying patches, or upgrading the Kubernetes component version. In cloud native spirit, we replace nodes with new patches/version installed instead of apply changes to nodes in-place. This means spinning up new nodes or node groups and drain pods from the old nodes to the new nodes. This process is https://docs.aws.amazon.com/eks/latest/userguide/update-workers.html[document here] for self managed EKS nodes. For managed node groups, please refer to https://docs.aws.amazon.com/eks/latest/userguide/update-managed-node-group.html[documentation here].
+Every now and then we'll need to update our worker nodes, like applying patches, or upgrading the Kubernetes component version. In cloud native spirit, we replace nodes with patched/upgraded nodes instead of apply changes to nodes in-place. This means spinning up new nodes or node groups and drain pods from the old nodes to the new ones. This process is https://docs.aws.amazon.com/eks/latest/userguide/update-workers.html[documented here] for self managed EKS nodes. For managed node groups, please refer to the https://docs.aws.amazon.com/eks/latest/userguide/update-managed-node-group.html[documentation here].
 
 === Disruption budget
 
@@ -153,7 +157,6 @@ Check https://kubernetes.io/docs/concepts/workloads/pods/disruptions/#how-disrup
 Oberservability is achieved when the data is made available from within the system that you wish to monitor. These data includes logs and metrics.
 
 === Logs
-
 ==== Control plane logs
 
 EKS does not enable cluster control plane logs by default (because there's https://aws.amazon.com/cloudwatch/pricing/[cost] involved). For production clusters, it is important to enable these logs. Control plane logs can be enabled from the AWS Console, CLI or APIs, as described https://docs.aws.amazon.com/eks/latest/userguide/control-plane-logs.html[here].
@@ -164,16 +167,21 @@ When running containers at scale, especially when adopting a microservice approa
 
 In k8s community, the most common solution is the EFK stack. Here's a https://eksworkshop.com/intermediate/230_logging/[guide on EFK at eksworkshop.com].
 
-For an AWS based solution, we can also https://aws.amazon.com/blogs/opensource/centralized-container-logging-fluent-bit/[ship logs to S3 via Kinesis Firehose and query using Athena].
+For an AWS based serverless solution, we can also https://aws.amazon.com/blogs/opensource/centralized-container-logging-fluent-bit/[ship logs to S3 via Kinesis Firehose and query using Athena].
 
 === Metrics
+
+Similar to logging, there are multiple options for metrics. https://prometheus.io/docs/introduction/overview/[Prometheus] + https://grafana.com/[Grafana] is a popular open-source solution. Amazon EKS Workshop has a guide on https://eksworkshop.com/intermediate/240_monitoring/[monitoring using Prometheus and Grafana on EKS]. There are also commercial solutions from Datadog, Dynatrace, New Relic, etc.
+
 ==== Container insights
 
-TODO
+https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/deploy-container-insights-EKS.html[CloudWatch Container Insights] is the AWS offerring for containers metrics. This guide on EKS Workshop demonstrates https://eksworkshop.com/intermediate/250_cloudwatch_container_insights/[how to setup and use Container Insights to monitor an EKS cluster].
 
 === Tracing
 
-TODO
+Tracing is important to gain visiblity on distributed transactions typical of microservices architecture. This usually involves injecting context information to corelate the different steps of a request. Popular open-source solution includes https://www.jaegertracing.io/[Jaeger] and https://zipkin.io/[Zipkin].
+
+AWS provides https://aws.amazon.com/xray/[X-Ray] for tracing. A https://eksworkshop.com/intermediate/245_x-ray/[walk-through is available on EKS workshop].
 
 == Multi-cluster
 
@@ -183,17 +191,30 @@ image::multiple-clusters.png[]
 
 NOTE: As most applications have external dependencies, such as a persistence backend, these dependencies should be available to both clusters for the above topology to work.
 
+In this setup, applications will be deployed to multiple clusters. This should be automated, e.g. from a CI/CD pipeline, where container images are pushed to a highly available registry accessible by the different clusters, and k8s object (deployments, services, jobs, etc) created on each cluster.
+
 === Federation
 
-TODO
+https://kubernetes.io/blog/2018/12/12/kubernetes-federation-evolution/[Federation] is an area that has been evolving to make it easier to operate multi-cluster. K8s Federation V1 has been deprecated and its use is discouraged. 
+
+https://github.com/kubernetes-sigs/kubefed/tree/master[Federation V2, or kubefed] is currently in *alpha* and 
+a https://github.com/kubernetes-sigs/kubefed/blob/master/docs/userguide.md[user guide] is available if you want to try it out for forward planning.
 
 == Infrastructure as code
 
-TODO
+There are many infrastructure as code solutions, many have capability to interact with k8s. Take advantage of this capability to define both the cluster(s) and workloads deployed on the clusters as code.
+
+This enables us to create/destroy clusters, along with the workloads, consistently, on demand. Potentially reduce running costs at the same time.
+
+Depending on RTO, this can also be a very cost effective DR mechanism when running on the cloud (for compute; still need to cater to DR for persistence stores for data, container images, etc.) 
 
 == References
 
 . https://eksworkshop.com[EKS Workshop]
 . https://docs.aws.amazon.com/eks/latest/userguide/metrics-server.html[Installing the Kubernetes Metrics Server on EKS]
-
-TODO
+. https://docs.aws.amazon.com/eks/latest/userguide/prometheus.html[EKS Control Plane Metrics with Prometheus]
+. https://docs.aws.amazon.com/eks/latest/userguide/launch-workers.html[Launching EKS Worker Nodes]
+. https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html[EKS Managed Node Groups]
+. https://aws.amazon.com/premiumsupport/knowledge-center/eks-cluster-autoscaler-setup/[Setting up Cluster Autoscaler on EKS]
+. https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/deploy-container-insights-EKS.html[Setting up CloudWatch Container Insights]
+. https://docs.aws.amazon.com/eks/latest/userguide/control-plane-logs.html[Enable EKS Control Plane Logs]
