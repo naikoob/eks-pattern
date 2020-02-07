@@ -1,0 +1,197 @@
+:icons: font
+:imagesdir: ./images
+:source-highlighter: coderay
+:toc: left
+
+= Securing apps on EKS
+
+This one stop document is a collection (of links) of best practices to secure applications deployed on Kubernetes (K8s), specifically https://aws.amazon.com/eks/[Amazon Elastic Kubernetes Service (EKS)]. This document is not about writing secure applications, and Fargate deployment is also not in the scope.
+
+== Network segmentation
+
+=== Endpoints
+
+When provisioning an EKS cluster, a highly available control plane consisting of etcd and Kubernetes master API servers is provisioned. Endpoint(s) are used to access the API server, this is where management tools such as `kubectl` communicate with the cluster. EKS provide public and private endpoints. A public endpoint allows access to K8s API server over the Internet, and secured using a combination of AWS Identity and Access Management(IAM) and K8s Role Based Access Control (RBAC).
+
+A private endpoint allow access to the K8s API server within you VPC, so all communication between worker nodes and the API server stays within the VPC.
+
+To reduce attack surface, always disable the public endpoint and use only the private endpoint. This can be done during cluster creation or 
+post cluster creation from the https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html[AWS console or CLI]. 
+
+=== Subnets
+
+When creating an EKS cluster, we also specify the subnets where nodes and pods are launched. Worker nodes should always be launched in a private subnet with no access from Internet. Load balancers can be provisioned on the public subnet(s) to expose the application to the Internet.
+
+==== Subnet labelling
+
+Load balancers are created dynamically when services are deployed on K8s. Subnets needs to be tagged accordingly so that K8s can discover them.
+
+* All subnets in the VPC available to K8s should be tagged
+|===
+| Key | Value
+| kubernetes.io/cluster/_<cluster-name>_ | shared
+|===
+
+* Public subnets should be tagged so that K8s only use those subnets for external load balancers
+|===
+| Key | Value
+| kubernetes.io/role/elb | 1
+|===
+
+* Private subnets should be tagged so that K8s only use those subnets for internal load balancers
+|===
+| Key | Value
+| kubernetes.io/role/internal-elb | 1
+|===
+
+=== Security groups
+
+Within AWS, security groups act as virtual firewall. They can be used to restrict communications by IP addresses, port and protocol. Security groups are applied to the worker nodes and control plane. Refer to the documentation for https://docs.aws.amazon.com/eks/latest/userguide/sec-group-reqs.html[recommended security groups configuration].
+
+=== Network ACL
+
+Consider using https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html[network ACLs] as an additional safeguard against mis-configured security groups. A network access control list (ACL) is an optional layer of security for your VPC that acts as a firewall for controlling traffic in and out of one or more subnets. You might set up network ACLs with rules similar to your security groups in order to add an additional layer of security to your VPC.
+
+=== Network policies
+
+K8s allows fine grained control of pod level ingress and egress traffic using https://kubernetes.io/docs/concepts/services-networking/network-policies/[Network Policies].
+
+Network policies requires a K8s network plugin. On EKS, we can use Calico as the network policy engine. Instructions to setup Calico can be found https://docs.aws.amazon.com/eks/latest/userguide/calico.html[here]. In addition, there is a section on network policies in https://eksworkshop.com/beginner/120_network-policies/[eksworkshop.com].
+
+In essence, network policies allows fine grained ingress and egress control over pods using K8s `NetworkPolicy` objects. Network policies are applied using labels and selectors like other K8s objects.
+
+An example `NetworkPolicy`
+[source,yaml]
+----
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: test-network-policy
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      role: db
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - ipBlock:
+        cidr: 172.17.0.0/16
+        except:
+        - 172.17.1.0/24
+    - namespaceSelector:
+        matchLabels:
+          project: myproject
+    - podSelector:
+        matchLabels:
+          role: frontend
+    ports:
+    - protocol: TCP
+      port: 6379
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 10.0.0.0/24
+    ports:
+    - protocol: TCP
+      port: 5978
+----
+
+NOTE: `NetworkPolicy` has no effect unless a network plugin that supports `NetworkPolicy` is installed.
+
+== Host and Image Hardening
+
+=== Worker Nodes
+
+EKS worker nodes runs on container optimized Amazon Machine Images (AMI). These operating systems do not contain additional libraries that are not essential for container deployments, and as a result helps to minimize attack vectors. 
+
+Customers are responsible for maintaining compliance of all configurations and functions at the operating system, network, and application layers. 
+
+https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html[Managed node groups] makes it more convenient to provision and manage the lifecycle of nodes, it is the customer's responsibility to initiate an update.
+
+If additional monitoring or management agents are required for the worker nodes, they should be packaged as K8s daemonsets with the necessary host access privileges.
+
+=== Image source
+
+Always verify source of images. Only use container images from trusted sources. Import verified/approved external images into a private registry and configure K8s cluster to pull images from the private registry only. Apply access control to the private registry to ensure all updates are authorized and auditable. 
+
+=== Image scanning
+
+Images should be scanned to identify potential vulnerabilities. There are commercial and open source tools for container image scanning. When using Amazon Elastic Container Registry (ECR), be sure to configure ECR to https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-scanning.html#scanning-repository[scan images on push].
+
+On top of static scanning, consider enabling dynamic scanning, so it's possible to identify vulnerabilities for containers running in test, QA or production environments, making it possible to catch vulnerabilities introduced by software installed post-build as well as zero-days. For dynamic (or runtime) container security, there us an array of options available, provided by third parties, from open source solutions such as https://falco.org/[CNCF Falco] to commercial offerings by including https://www.aquasec.com/products/aqua-cloud-native-security-platform/[Aqua Security], https://www.trendmicro.com/aws/features/[Trend Micro], and https://www.twistlock.com/solutions/aws-security/[Twistlock].
+
+=== Include minimal software required in images
+
+Prefer minimal  images. The less software installed in the container image, the less chance of it containing vulnerabilities. By preferring minimal images that bundle only the necessary system tools and libraries required to run your project, you are also minimizing the attack surface for attackers.
+
+When building application images, consider using https://docs.docker.com/develop/develop-images/multistage-build/[multi-stage build] such that packages and tools required for compiling and dependencies required for testing etc. are not included in the production image.
+
+== Data Protection
+
+Workloads that contain sensitive data, such as cardholder data, should secure all storage of data. Storage of data should be on secure file stores or databases and not onto the underlying container host. System architects should be mindful of volume mounts and sharing of data between containers, such as host file systems and temporary storage.
+
+=== Configuration and environment variables
+
+Sensitive data and environment variables, for example database connection strings that are contained within container build files, should be secured. AWS Secrets Manager and AWS Systems Manager Parameter Store are two services that can be used to secure sensitive data within container build files. Applications can use AWS APIs to retreive the parameters and secrets during runtime given the right IAM access. This https://github.com/aws-samples/aws-workshop-for-kubernetes/tree/master/04-path-security-and-networking/401-configmaps-and-secrets#configuration-data-and-secrets-using-aws-parameter-store[quick start] contains samples of how this can be done.
+
+There are also solutions that provide integration between K8s and Secrets Manager, such as https://www.godaddy.com/engineering/2019/04/16/kubernetes-external-secrets/["external secrets" by GoDaddy], and commercial solution such as https://www.hashicorp.com/blog/injecting-vault-secrets-into-kubernetes-pods-via-a-sidecar/[Hashicorp vault] to externalize parameters and secrets in secure store.
+
+=== Data in transit
+
+Sensitive information must be encrypted during transmission over open, public networks. In EKS, all control plane requests are over TLS. At the data layer, expose services using load balancer (by using `LoadBalancer` service type) or using an https://docs.aws.amazon.com/eks/latest/userguide/alb-ingress.html[ALB ingress controller] to take advantage of integration with https://aws.amazon.com/certificate-manager/[AWS Certificate Manager].
+
+EKS load-balanced service integrates with AWS Certificate Manager by specifying the certificate ARN in the `Service` object using the `service.beta.kubernetes.io/aws-load-balancer-ssl-cert` annotation. There is a https://aws.amazon.com/premiumsupport/knowledge-center/terminate-https-traffic-eks-acm/[knowledge base article on this].
+
+ALB ingress controller integrates with AWS Certificate Manager by specifying the certificate ARN in the `Ingress` object with the https://kubernetes-sigs.github.io/aws-alb-ingress-controller/guide/ingress/annotation/#certificate-arn[ `alb.ingress.kubernetes.io/certificate-arn` annotation].
+
+Amazon Application Load Balancer also support use of the integrated AWS Web Application Firewall (WAF) to secure communications at the application-layer. The AWS WAF protects applications and APIs against common web exploits like those identified within the OWASP Top 10. Use the `alb.ingress.kubernetes.io/waf-acl-id` annotation on the `Ingress` object to specify the identifier for the Amazon WAF web access control list.
+
+== User Access
+
+=== Least priviledge user
+
+Container images should be run with non-privileged user accounts. When a `Dockerfile` do not specify a `USER`, it defaults to `root`. This means that a compromised container service may extend root privileges to an attacker who may use the elevated access to further exploit the underlying host. 
+
+Most applications do not require `root` permission. Reduce the exposure by creating a dedicated user and group in the Docker image for the application.
+
+=== IAM role for service account
+
+In K8s, service accounts are used to provide an identity for pods. Pods that want to interact with the API server will authenticate with a particular service account. Since Sept 2019, EKS added the ability to map service accounts to IAM roles. When applying service accounts to deployments, pods can assume IAM roles at runtime to access AWS resources such as S3 buckets, DynamoDB, etc.
+
+IAM role for service account requires https://docs.aws.amazon.com/eks/latest/userguide/enable-iam-roles-for-service-accounts.html[setting up an OIDC indentity provider in IAM]. There is also a https://eksworkshop.com/beginner/110_irsa/[lab in eksworkshop.com] on this topic.
+
+== Tracking and Monitoring Access
+
+Leverage AWS event log services to establish event log monitoring at the network, host, and container.  Enable VPC Flow logs to capture network traffic that details packet information, such as the protocol, port, and source and destination address information.
+
+=== Logs
+
+==== Control plane logs
+
+EKS does not enable cluster control plane logs by default (because there's https://aws.amazon.com/cloudwatch/pricing/[cost] involved). For production clusters, it is important to enable these logs. Control plane logs can be enabled from the AWS Console, CLI or APIs, as described https://docs.aws.amazon.com/eks/latest/userguide/control-plane-logs.html[here].
+
+==== Application logs
+
+When running containers at scale, especially when adopting a microservice approach, it is important to have a logging infrastucture to aggregate logs from different deployments.
+
+In K8s community, the most common solution is the EFK stack. Here's a https://eksworkshop.com/intermediate/230_logging/[guide on EFK at eksworkshop.com].
+
+For an AWS based serverless solution, we can also https://aws.amazon.com/blogs/opensource/centralized-container-logging-fluent-bit/[ship logs to S3 via Kinesis Firehose and query using Athena].
+
+=== Metrics
+
+Similar to logging, there are multiple options for metrics. https://prometheus.io/docs/introduction/overview/[Prometheus] + https://grafana.com/[Grafana] is a popular open-source solution. Amazon EKS Workshop has a guide on https://eksworkshop.com/intermediate/240_monitoring/[monitoring using Prometheus and Grafana on EKS]. There are also commercial solutions from Datadog, Dynatrace, New Relic, etc.
+
+==== Container insights
+
+https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/deploy-container-insights-EKS.html[CloudWatch Container Insights] is the AWS offerring for containers metrics. This guide on EKS Workshop demonstrates https://eksworkshop.com/intermediate/250_cloudwatch_container_insights/[how to setup and use Container Insights to monitor an EKS cluster].
+
+=== Tracing
+
+Tracing is important to gain visiblity on distributed transactions typical of microservices architecture. This usually involves injecting context information to corelate the different steps of a request. Popular open-source solution includes https://www.jaegertracing.io/[Jaeger] and https://zipkin.io/[Zipkin].
+
+AWS provides https://aws.amazon.com/xray/[X-Ray] for tracing. A https://eksworkshop.com/intermediate/245_x-ray/[walk-through is available on EKS workshop].
+
