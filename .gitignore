@@ -74,4 +74,8 @@ Temporary Items
 # Ignore all local history of files
 .history
 
+#
+*.html
+
+
 # End of https://www.gitignore.io/api/git,macos,gitbook,visualstudiocode
