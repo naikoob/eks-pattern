@@ -5,7 +5,9 @@
 
 = Securing apps on EKS
 
-This one stop document is a collection (of links) of best practices to secure applications deployed on Kubernetes (K8s), specifically https://aws.amazon.com/eks/[Amazon Elastic Kubernetes Service (EKS)]. This document is not about writing secure applications, and Fargate deployment is also not in the scope.
+This one stop document is a collection (of links) of best practices to secure applications deployed on Kubernetes (K8s), specifically https://aws.amazon.com/eks/[Amazon Elastic Kubernetes Service (EKS)]. This document focus on EKS with worker nodes (managed and unmanaged), Fargate deployment is not in the scope of this document.
+
+This document is not about writing secure applications, although it is important that secure coding practices be adopted.
 
 == Network segmentation
 
@@ -16,7 +18,7 @@ When provisioning an EKS cluster, a highly available control plane consisting of
 A private endpoint allow access to the K8s API server within you VPC, so all communication between worker nodes and the API server stays within the VPC.
 
 To reduce attack surface, always disable the public endpoint and use only the private endpoint. This can be done during cluster creation or 
-post cluster creation from the https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html[AWS console or CLI]. 
+post cluster creation from the https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html[AWS console or CLI].
 
 === Subnets
 
