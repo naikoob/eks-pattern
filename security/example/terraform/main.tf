@@ -95,8 +95,6 @@ module "eks" {
 
   tags = {
     Environment = "test"
-    GithubRepo  = "terraform-aws-eks"
-    GithubOrg   = "terraform-aws-modules"
   }
 
   node_groups_defaults = {

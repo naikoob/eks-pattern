@@ -67,6 +67,7 @@ rules:
     resourceNames: ["cluster-autoscaler"]
     resources: ["leases"]
     verbs: ["get", "update"]
+
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
