@@ -125,4 +125,3 @@ module "eks" {
   map_accounts = var.map_accounts
 */
 }
-

@@ -153,6 +153,10 @@ Amazon Application Load Balancer also support use of the integrated AWS Web Appl
 
 == User Access
 
+=== Enable role based access control (RBAC)
+
+Use https://kubernetes.io/docs/reference/access-authn-authz/rbac/[K8s RBAC] to authorize access to K8s cluster. In EKS, K8s roles can be mapped to IAM users and roles. Different IAM roles should be created for each cluster for better segregation. 
+
 === Least priviledge user
 
 Container images should be run with non-privileged user accounts. When a `Dockerfile` do not specify a `USER`, it defaults to `root`. This means that a compromised container service may extend root privileges to an attacker who may use the elevated access to further exploit the underlying host. 
