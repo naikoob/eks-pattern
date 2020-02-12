@@ -3,9 +3,9 @@ This directory contains Terraform configuration to provision
 * a VPC
 * EKS cluster with:
 ** Control plane logging enabled
-** IAM role of service accounts enabled
+** IAM role for service accounts (IRSA) enabled
 * Managed Node Group with:
-** Cluster autoscaling
+** Cluster autoscaling (using IRSA)
 ** Cloudwatch agent
 
 NOTE: Cluster autoscaling and cloudwatch agents installation are implemented as templatized K8s yamls that should be applied with `kubectl` after cluster is provisioned. The generated yamls are found in the `outputs` directory after successful Terraform apply.
